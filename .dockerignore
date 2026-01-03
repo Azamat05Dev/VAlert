@@ -1,0 +1,44 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Data and databases
+data/
+*.db
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# IDE
+.idea/
+.vscode/
+
+# Git
+.git/
+.gitignore
+
+# Docker
+docker-compose.yml
+
+# Documentation
+README.md
+*.md
+
+# Tests
+tests/
+test_*.py
+
+# OS
+.DS_Store
+Thumbs.db
