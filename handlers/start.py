@@ -7,8 +7,8 @@ from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 from handlers.common import get_or_create_user, get_user_language, set_user_language
 from locales.helpers import t
 
-# WebApp URL (update after Vercel deployment)
-WEBAPP_URL = "https://valert-webapp.vercel.app"
+# WebApp URL (Live Vercel deployment)
+WEBAPP_URL = "https://v-alert-lake.vercel.app"
 
 
 def get_main_menu_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
