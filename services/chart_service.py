@@ -1,10 +1,11 @@
 """
-Chart Service - NO FAKE DATA, Real history only
+Chart Service - With CBU Historical Data Fallback
 """
 import logging
 import io
 from datetime import datetime, timedelta
 from typing import Optional
+import httpx
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -19,16 +20,55 @@ logger = logging.getLogger(__name__)
 plt.style.use('seaborn-v0_8-darkgrid')
 
 
+async def fetch_cbu_history(currency_code: str, days: int = 7) -> list:
+    """Fetch historical rates from CBU archive API"""
+    try:
+        rates = []
+        today = datetime.now()
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for i in range(days):
+                date = today - timedelta(days=i)
+                date_str = date.strftime("%Y-%m-%d")
+                
+                url = f"https://cbu.uz/uz/arkhiv-kursov-valyut/json/{currency_code}/{date_str}/"
+                
+                try:
+                    response = await client.get(url)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data and len(data) > 0:
+                            rate_data = data[0]
+                            rates.append({
+                                "date": date,
+                                "rate": float(rate_data.get("Rate", 0)),
+                                "nominal": int(rate_data.get("Nominal", 1))
+                            })
+                except Exception as e:
+                    logger.debug(f"CBU fetch error for {date_str}: {e}")
+                    continue
+        
+        # Sort by date ascending
+        rates.sort(key=lambda x: x["date"])
+        logger.info(f"CBU history: fetched {len(rates)} records for {currency_code}")
+        return rates
+        
+    except Exception as e:
+        logger.error(f"CBU history fetch error: {e}")
+        return []
+
+
 async def generate_rate_chart(
     currency_code: str,
     bank_code: str = "cbu",
     days: int = 7
 ) -> Optional[bytes]:
-    """Generate rate history chart - REAL DATA ONLY"""
+    """Generate rate history chart - with CBU fallback"""
     try:
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
         
+        # Try local history first
         async with get_session() as session:
             result = await session.execute(
                 select(RateHistory).where(
@@ -39,14 +79,25 @@ async def generate_rate_chart(
             )
             history = result.scalars().all()
         
-        if len(history) < 2:
-            # Not enough real data - return None (no fake data!)
-            logger.info(f"Not enough data for {currency_code} chart")
-            return None
+        dates = []
+        rates = []
         
-        # Prepare data
-        dates = [h.recorded_at for h in history]
-        rates = [h.official_rate or h.buy_rate or 0 for h in history]
+        if len(history) >= 2:
+            # Use local data
+            dates = [h.recorded_at for h in history]
+            rates = [h.official_rate or h.buy_rate or 0 for h in history]
+            logger.info(f"Using local history: {len(history)} records")
+        else:
+            # Fallback: fetch from CBU archive
+            logger.info(f"Local data insufficient, fetching from CBU archive...")
+            cbu_history = await fetch_cbu_history(currency_code, days)
+            
+            if len(cbu_history) < 2:
+                logger.info(f"Not enough data for {currency_code} chart")
+                return None
+            
+            dates = [h["date"] for h in cbu_history]
+            rates = [h["rate"] for h in cbu_history]
         
         # Create chart
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -90,11 +141,12 @@ async def generate_rate_chart(
 
 
 async def generate_trend_analysis(currency_code: str, days: int = 7) -> dict:
-    """Generate trend analysis - REAL DATA ONLY"""
+    """Generate trend analysis - with CBU fallback"""
     try:
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
         
+        # Try local history first
         async with get_session() as session:
             result = await session.execute(
                 select(RateHistory).where(
@@ -105,13 +157,19 @@ async def generate_trend_analysis(currency_code: str, days: int = 7) -> dict:
             )
             history = result.scalars().all()
         
-        if len(history) < 2:
-            return {
-                "has_data": False,
-                "message": "⚠️ Tarix ma'lumotlari hali to'planmagan.\nBot ishlagan vaqt davomida ma'lumotlar yig'iladi."
-            }
+        rates = []
         
-        rates = [h.official_rate or h.buy_rate or 0 for h in history]
+        if len(history) >= 2:
+            rates = [h.official_rate or h.buy_rate or 0 for h in history]
+        else:
+            # Fallback: CBU archive
+            cbu_history = await fetch_cbu_history(currency_code, days)
+            if len(cbu_history) < 2:
+                return {
+                    "has_data": False,
+                    "message": "⚠️ Tarix ma'lumotlari yetarli emas."
+                }
+            rates = [h["rate"] for h in cbu_history]
         
         first_rate = rates[0]
         last_rate = rates[-1]

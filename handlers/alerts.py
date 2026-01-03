@@ -348,7 +348,10 @@ async def build_alerts_list(user_id: int, lang: str) -> tuple:
     
     if not alerts:
         message = "📋 **Alertlarim**\n\n📭 Hali alertlar yo'q.\n\n/alert bilan yangi yarating!"
-        keyboard = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="main_menu")]]
+        keyboard = [
+            [InlineKeyboardButton("➕ Yangi alert", callback_data="new_alert")],
+            [InlineKeyboardButton("🏠 Menyu", callback_data="main_menu")]
+        ]
         return message, keyboard
     
     message = "📋 **Alertlarim**\n\n"
@@ -358,11 +361,24 @@ async def build_alerts_list(user_id: int, lang: str) -> tuple:
         bank = BANKS.get(a.bank_code, {}).get("name_uz", a.bank_code)
         rate = "📥" if a.rate_type == "buy" else "📤"
         dir_emoji = "⬆️" if a.direction == "above" else "⬇️"
+        status = "⏸️" if a.is_paused else "🔔"
         
-        message += f"{rate} **{a.currency_code}** {dir_emoji} {a.threshold:,.0f}\n   🏦 {bank}\n\n"
-        keyboard.append([InlineKeyboardButton(f"🗑️ O'chirish: {a.currency_code} {a.threshold:,.0f}", callback_data=f"del_{a.id}")])
+        message += f"{status} {rate} **{a.currency_code}** {dir_emoji} {a.threshold:,.0f}\n   🏦 {bank}\n\n"
+        
+        # Pause/Resume and Delete buttons
+        if a.is_paused:
+            keyboard.append([
+                InlineKeyboardButton(f"▶️ Davom: {a.currency_code}", callback_data=f"resume_{a.id}"),
+                InlineKeyboardButton(f"🗑️", callback_data=f"del_{a.id}")
+            ])
+        else:
+            keyboard.append([
+                InlineKeyboardButton(f"⏸️ Pauza: {a.currency_code}", callback_data=f"pause_{a.id}"),
+                InlineKeyboardButton(f"🗑️", callback_data=f"del_{a.id}")
+            ])
     
-    keyboard.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="main_menu")])
+    keyboard.append([InlineKeyboardButton("➕ Yangi alert", callback_data="new_alert")])
+    keyboard.append([InlineKeyboardButton("🏠 Menyu", callback_data="main_menu")])
     return message, keyboard
 
 
@@ -381,6 +397,50 @@ async def delete_alert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     
     message, keyboard = await build_alerts_list(user_id, lang)
     message = "✅ O'chirildi!\n\n" + message
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+
+async def pause_alert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Alert'ni vaqtincha to'xtatish"""
+    query = update.callback_query
+    await query.answer("⏸️ Alert to'xtatildi")
+    
+    alert_id = int(query.data.replace("pause_", ""))
+    user_id = update.effective_user.id
+    lang = await get_user_language(user_id)
+    
+    async with get_session() as session:
+        result = await session.execute(
+            select(Alert).where(Alert.id == alert_id, Alert.user_id == user_id)
+        )
+        alert = result.scalar_one_or_none()
+        if alert:
+            alert.is_paused = True
+            await session.commit()
+    
+    message, keyboard = await build_alerts_list(user_id, lang)
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+
+async def resume_alert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Alert'ni qayta faollashtirish"""
+    query = update.callback_query
+    await query.answer("▶️ Alert faollashtirildi")
+    
+    alert_id = int(query.data.replace("resume_", ""))
+    user_id = update.effective_user.id
+    lang = await get_user_language(user_id)
+    
+    async with get_session() as session:
+        result = await session.execute(
+            select(Alert).where(Alert.id == alert_id, Alert.user_id == user_id)
+        )
+        alert = result.scalar_one_or_none()
+        if alert:
+            alert.is_paused = False
+            await session.commit()
+    
+    message, keyboard = await build_alerts_list(user_id, lang)
     await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
 
@@ -425,4 +485,7 @@ def get_alerts_handlers() -> list:
         CommandHandler("myalerts", my_alerts_command),
         CallbackQueryHandler(my_alerts_callback, pattern=r"^my_alerts$"),
         CallbackQueryHandler(delete_alert, pattern=r"^del_"),
+        CallbackQueryHandler(pause_alert, pattern=r"^pause_"),
+        CallbackQueryHandler(resume_alert, pattern=r"^resume_"),
     ]
+

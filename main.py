@@ -75,8 +75,24 @@ async def post_shutdown(app: Application) -> None:
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle errors"""
+    """Handle errors and notify user"""
     logger.error(f"Error: {context.error}")
+    
+    # Try to notify user about the error
+    try:
+        if update and hasattr(update, 'effective_chat') and update.effective_chat:
+            error_message = (
+                "❌ **Xatolik yuz berdi**\n\n"
+                "Iltimos, keyinroq qayta urinib ko'ring.\n\n"
+                "Muammo davom etsa, /start bosing."
+            )
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=error_message,
+                parse_mode="Markdown"
+            )
+    except Exception as e:
+        logger.error(f"Failed to send error message: {e}")
 
 
 def main() -> None:

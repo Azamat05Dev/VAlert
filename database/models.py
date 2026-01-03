@@ -50,6 +50,7 @@ class Alert(Base):
     direction: Mapped[str] = mapped_column(String(10), nullable=False)
     rate_type: Mapped[str] = mapped_column(String(10), default="buy")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_paused: Mapped[bool] = mapped_column(Boolean, default=False)  # Pause without delete
     is_triggered: Mapped[bool] = mapped_column(Boolean, default=False)
     is_repeating: Mapped[bool] = mapped_column(Boolean, default=False)  # Auto-repeat after trigger
     last_triggered_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -126,5 +127,6 @@ class SmartExchange(Base):
     initial_best_bank: Mapped[str] = mapped_column(String(50), nullable=False)  # Best bank at start
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_accepted: Mapped[bool] = mapped_column(Boolean, default=False)
+    snooze_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # 30min snooze
     last_notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
