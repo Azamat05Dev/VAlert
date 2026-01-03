@@ -52,8 +52,7 @@ async def save_rate_history():
                         currency_code=currency,
                         official_rate=rate.get("official_rate"),
                         buy_rate=rate.get("buy_rate"),
-                        sell_rate=rate.get("sell_rate"),
-                        diff=rate.get("diff", 0)
+                        sell_rate=rate.get("sell_rate")
                     )
                     session.add(history)
             await session.commit()
@@ -72,9 +71,9 @@ async def check_big_changes():
             continue
         
         current = rate.get("official_rate", 0)
-        prev = previous_rates.get(currency, current)
+        prev = previous_rates.get(currency)
         
-        if prev > 0:
+        if prev is not None and prev > 0:
             change_pct = abs((current - prev) / prev) * 100
             
             if change_pct >= 1.0:
