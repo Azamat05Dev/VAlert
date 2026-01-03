@@ -1,16 +1,26 @@
 """
 Start Command Handler - Simplified
 """
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 
 from handlers.common import get_or_create_user, get_user_language, set_user_language
 from locales.helpers import t
 
+# WebApp URL (update after Vercel deployment)
+WEBAPP_URL = "https://valert-webapp.vercel.app"
+
 
 def get_main_menu_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
-    """Full main menu"""
+    """Full main menu with WebApp"""
     keyboard = [
+        # WebApp Button (Premium Feature)
+        [
+            InlineKeyboardButton(
+                "📱 Mini App", 
+                web_app=WebAppInfo(url=WEBAPP_URL)
+            ),
+        ],
         [
             InlineKeyboardButton("📊 Kurslar", callback_data="rates"),
             InlineKeyboardButton("🏆 Eng yaxshi", callback_data="best"),
@@ -39,6 +49,8 @@ def get_main_menu_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
         ],
     ]
     return InlineKeyboardMarkup(keyboard)
+
+
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
