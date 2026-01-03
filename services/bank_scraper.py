@@ -1,185 +1,49 @@
 """
-Bank Scraper - Real rates from all Uzbekistan bank websites
-Supports both API and HTML scraping methods
+Bank Scraper - Real rates from Uzbekistan banks
+Working URLs verified as of January 2026
 """
 import logging
 import httpx
+import re
 from bs4 import BeautifulSoup
-from typing import Optional
+from typing import Optional, List, Dict
 from config import POPULAR_CURRENCIES
 
 logger = logging.getLogger(__name__)
 
-# Headers to mimic browser
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
     "Accept": "text/html,application/xhtml+xml,application/json",
     "Accept-Language": "uz,ru;q=0.9,en;q=0.8"
 }
 
-# Bank scraper configurations
-BANK_CONFIGS = {
-    "nbu": {
-        "name": "Milliy Bank",
-        "url": "https://nbu.uz/exchange-rates/",
-        "method": "html",
-    },
-    "kapitalbank": {
-        "name": "Kapitalbank", 
-        "url": "https://kapitalbank.uz/uz/exchange-rates/",
-        "method": "html",
-    },
-    "uzumbank": {
-        "name": "Uzum Bank",
-        "url": "https://uzumbank.uz/api/v1/rates",
-        "method": "api",
-    },
-    "aloqabank": {
-        "name": "Aloqabank",
-        "url": "https://aloqabank.uz/uz/exchange-rates",
-        "method": "html",
-    },
-    "asakabank": {
-        "name": "Asakabank",
-        "url": "https://asakabank.uz/uz/currency",
-        "method": "html",
-    },
-    "xalqbank": {
-        "name": "Xalq Banki",
-        "url": "https://xb.uz/uz/kurs-obmena-valyut",
-        "method": "html",
-    },
-    "ipotekabank": {
-        "name": "Ipoteka Bank",
-        "url": "https://ipotekabank.uz/uz/exchange-rates",
-        "method": "html",
-    },
-    "agrobank": {
-        "name": "Agrobank",
-        "url": "https://agrobank.uz/uz/exchange-rates",
-        "method": "html",
-    },
-    "hamkorbank": {
-        "name": "Hamkorbank",
-        "url": "https://hamkorbank.uz/uz/exchange-rates",
-        "method": "html",
-    },
-    "infinbank": {
-        "name": "Infinbank",
-        "url": "https://infinbank.com/uz/exchange-rates",
-        "method": "html",
-    },
-    "davr": {
-        "name": "Davr Bank",
-        "url": "https://davrbank.uz/uz/exchange-rates",
-        "method": "html",
-    },
-    "orientfinans": {
-        "name": "Orient Finans",
-        "url": "https://orientfinance.uz/uz/valyuta-kurslari",
-        "method": "html",
-    },
-    "anorbank": {
-        "name": "Anorbank",
-        "url": "https://anorbank.uz/uz/exchange",
-        "method": "html",
-    },
-    "tbc": {
-        "name": "TBC Bank",
-        "url": "https://tbcbank.uz/uz/exchange-rates",
-        "method": "html",
-    },
-    "ipak": {
-        "name": "Ipak Yo'li Bank",
-        "url": "https://ipakyulibank.uz/uz/exchange-rates",
-        "method": "html",
-    },
-}
 
-
-async def scrape_bank(bank_code: str) -> list[dict]:
-    """Scrape rates from a single bank"""
-    config = BANK_CONFIGS.get(bank_code)
-    if not config:
-        return []
-    
+async def scrape_nbu() -> List[Dict]:
+    """NBU (Milliy Bank) - https://nbu.uz/uz/exchange-rates/"""
     try:
-        if config["method"] == "api":
-            return await scrape_api(config["url"], bank_code)
-        else:
-            return await scrape_html(config["url"], bank_code)
-    except Exception as e:
-        logger.debug(f"{bank_code} scrape failed: {e}")
-        return []
-
-
-async def scrape_api(url: str, bank_code: str) -> list[dict]:
-    """Scrape from JSON API"""
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, headers=HEADERS)
-            if response.status_code != 200:
-                return []
-            
-            data = response.json()
-            rates = []
-            
-            # Handle different API response formats
-            items = data if isinstance(data, list) else data.get('rates', data.get('data', []))
-            
-            for item in items:
-                currency = item.get('currency', item.get('code', item.get('Ccy', '')))
-                if currency in POPULAR_CURRENCIES:
-                    rates.append({
-                        "currency_code": currency,
-                        "buy_rate": float(item.get('buy', item.get('Rate', 0))),
-                        "sell_rate": float(item.get('sell', item.get('Rate', 0)))
-                    })
-            
-            return rates
-    except Exception as e:
-        logger.debug(f"API scrape error: {e}")
-        return []
-
-
-async def scrape_html(url: str, bank_code: str) -> list[dict]:
-    """Scrape from HTML page - universal parser"""
-    try:
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            response = await client.get(url, headers=HEADERS)
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                "https://nbu.uz/uz/exchange-rates/",
+                headers=HEADERS,
+                follow_redirects=True
+            )
             if response.status_code != 200:
                 return []
             
             soup = BeautifulSoup(response.text, 'lxml')
             rates = []
             
-            # Try to find exchange rate table
-            tables = soup.find_all('table')
-            for table in tables:
+            # Find table with rates
+            table = soup.find('table')
+            if table:
                 rows = table.find_all('tr')
                 for row in rows:
                     cells = row.find_all(['td', 'th'])
-                    if len(cells) >= 3:
-                        text = row.get_text()
-                        for currency in POPULAR_CURRENCIES:
-                            if currency in text:
-                                numbers = extract_numbers(text)
-                                if len(numbers) >= 2:
-                                    rates.append({
-                                        "currency_code": currency,
-                                        "buy_rate": numbers[0],
-                                        "sell_rate": numbers[1] if len(numbers) > 1 else numbers[0]
-                                    })
-                                    break
-            
-            # Also try div-based layouts
-            if not rates:
-                rate_divs = soup.find_all(['div', 'li'], class_=lambda x: x and ('currency' in str(x).lower() or 'rate' in str(x).lower()))
-                for div in rate_divs:
-                    text = div.get_text()
-                    for currency in POPULAR_CURRENCIES:
+                    text = row.get_text()
+                    
+                    for currency in ['USD', 'EUR', 'RUB', 'GBP']:
                         if currency in text:
-                            numbers = extract_numbers(text)
+                            numbers = extract_rates(text)
                             if len(numbers) >= 2:
                                 rates.append({
                                     "currency_code": currency,
@@ -188,67 +52,330 @@ async def scrape_html(url: str, bank_code: str) -> list[dict]:
                                 })
                                 break
             
-            # Remove duplicates
-            seen = set()
-            unique_rates = []
-            for r in rates:
-                if r["currency_code"] not in seen:
-                    seen.add(r["currency_code"])
-                    unique_rates.append(r)
-            
-            if unique_rates:
-                logger.info(f"{bank_code}: scraped {len(unique_rates)} rates")
-            
-            return unique_rates
-            
+            if rates:
+                logger.info(f"NBU: scraped {len(rates)} rates")
+            return rates
     except Exception as e:
-        logger.debug(f"HTML scrape error for {bank_code}: {e}")
+        logger.debug(f"NBU scrape error: {e}")
         return []
 
 
-def extract_numbers(text: str) -> list[float]:
-    """Extract numbers from text that look like exchange rates"""
-    import re
-    # Match numbers like 12 850, 12850, 12,850, 12850.00
+async def scrape_kapitalbank() -> List[Dict]:
+    """Kapitalbank - https://kapitalbank.uz/uz/services/exchange-rates/"""
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                "https://kapitalbank.uz/uz/services/exchange-rates/",
+                headers=HEADERS,
+                follow_redirects=True
+            )
+            if response.status_code != 200:
+                return []
+            
+            soup = BeautifulSoup(response.text, 'lxml')
+            rates = []
+            
+            # Find rate containers
+            for currency in ['USD', 'EUR', 'RUB', 'GBP']:
+                text = soup.get_text()
+                if currency in text:
+                    # Find currency section
+                    pattern = rf'{currency}[^\d]*(\d[\d\s,.]+)[^\d]*(\d[\d\s,.]+)'
+                    match = re.search(pattern, text)
+                    if match:
+                        buy = parse_number(match.group(1))
+                        sell = parse_number(match.group(2))
+                        if buy and sell:
+                            rates.append({
+                                "currency_code": currency,
+                                "buy_rate": buy,
+                                "sell_rate": sell
+                            })
+            
+            if rates:
+                logger.info(f"Kapitalbank: scraped {len(rates)} rates")
+            return rates
+    except Exception as e:
+        logger.debug(f"Kapitalbank scrape error: {e}")
+        return []
+
+
+async def scrape_asakabank() -> List[Dict]:
+    """Asakabank - homepage widget https://asakabank.uz/uz/"""
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                "https://asakabank.uz/uz/",
+                headers=HEADERS,
+                follow_redirects=True
+            )
+            if response.status_code != 200:
+                return []
+            
+            soup = BeautifulSoup(response.text, 'lxml')
+            rates = []
+            
+            # Find currency widget
+            text = soup.get_text()
+            
+            for currency in ['USD', 'EUR', 'RUB']:
+                pattern = rf'{currency}[^\d]*(\d[\d\s,.]+)[^\d]*(\d[\d\s,.]+)'
+                match = re.search(pattern, text)
+                if match:
+                    buy = parse_number(match.group(1))
+                    sell = parse_number(match.group(2))
+                    if buy and sell and 1000 < buy < 100000:
+                        rates.append({
+                            "currency_code": currency,
+                            "buy_rate": buy,
+                            "sell_rate": sell
+                        })
+            
+            if rates:
+                logger.info(f"Asakabank: scraped {len(rates)} rates")
+            return rates
+    except Exception as e:
+        logger.debug(f"Asakabank scrape error: {e}")
+        return []
+
+
+async def scrape_xalqbank() -> List[Dict]:
+    """Xalq Banki - header widget https://xb.uz/"""
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                "https://xb.uz/",
+                headers=HEADERS,
+                follow_redirects=True
+            )
+            if response.status_code != 200:
+                return []
+            
+            soup = BeautifulSoup(response.text, 'lxml')
+            rates = []
+            
+            text = soup.get_text()
+            
+            for currency in ['USD', 'EUR', 'RUB']:
+                pattern = rf'{currency}[^\d]*(\d[\d\s,.]+)[^\d]*(\d[\d\s,.]+)'
+                match = re.search(pattern, text)
+                if match:
+                    buy = parse_number(match.group(1))
+                    sell = parse_number(match.group(2))
+                    if buy and sell and 1000 < buy < 100000:
+                        rates.append({
+                            "currency_code": currency,
+                            "buy_rate": buy,
+                            "sell_rate": sell
+                        })
+            
+            if rates:
+                logger.info(f"Xalq Banki: scraped {len(rates)} rates")
+            return rates
+    except Exception as e:
+        logger.debug(f"Xalq Banki scrape error: {e}")
+        return []
+
+
+async def scrape_ipotekabank() -> List[Dict]:
+    """Ipoteka Bank - https://ipotekabank.uz/"""
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                "https://ipotekabank.uz/uz/",
+                headers=HEADERS,
+                follow_redirects=True
+            )
+            if response.status_code != 200:
+                return []
+            
+            soup = BeautifulSoup(response.text, 'lxml')
+            rates = []
+            text = soup.get_text()
+            
+            for currency in ['USD', 'EUR', 'RUB']:
+                pattern = rf'{currency}[^\d]*(\d[\d\s,.]+)[^\d]*(\d[\d\s,.]+)'
+                match = re.search(pattern, text)
+                if match:
+                    buy = parse_number(match.group(1))
+                    sell = parse_number(match.group(2))
+                    if buy and sell and 1000 < buy < 100000:
+                        rates.append({
+                            "currency_code": currency,
+                            "buy_rate": buy,
+                            "sell_rate": sell
+                        })
+            
+            if rates:
+                logger.info(f"Ipoteka Bank: scraped {len(rates)} rates")
+            return rates
+    except Exception as e:
+        logger.debug(f"Ipoteka Bank scrape error: {e}")
+        return []
+
+
+async def scrape_agrobank() -> List[Dict]:
+    """Agrobank - https://agrobank.uz/"""
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                "https://agrobank.uz/uz/",
+                headers=HEADERS,
+                follow_redirects=True
+            )
+            if response.status_code != 200:
+                return []
+            
+            soup = BeautifulSoup(response.text, 'lxml')
+            rates = []
+            text = soup.get_text()
+            
+            for currency in ['USD', 'EUR', 'RUB']:
+                pattern = rf'{currency}[^\d]*(\d[\d\s,.]+)[^\d]*(\d[\d\s,.]+)'
+                match = re.search(pattern, text)
+                if match:
+                    buy = parse_number(match.group(1))
+                    sell = parse_number(match.group(2))
+                    if buy and sell and 1000 < buy < 100000:
+                        rates.append({
+                            "currency_code": currency,
+                            "buy_rate": buy,
+                            "sell_rate": sell
+                        })
+            
+            if rates:
+                logger.info(f"Agrobank: scraped {len(rates)} rates")
+            return rates
+    except Exception as e:
+        logger.debug(f"Agrobank scrape error: {e}")
+        return []
+
+
+async def scrape_aloqabank() -> List[Dict]:
+    """Aloqabank - https://aloqabank.uz/"""
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                "https://aloqabank.uz/uz/",
+                headers=HEADERS,
+                follow_redirects=True
+            )
+            if response.status_code != 200:
+                return []
+            
+            soup = BeautifulSoup(response.text, 'lxml')
+            rates = []
+            text = soup.get_text()
+            
+            for currency in ['USD', 'EUR', 'RUB']:
+                pattern = rf'{currency}[^\d]*(\d[\d\s,.]+)[^\d]*(\d[\d\s,.]+)'
+                match = re.search(pattern, text)
+                if match:
+                    buy = parse_number(match.group(1))
+                    sell = parse_number(match.group(2))
+                    if buy and sell and 1000 < buy < 100000:
+                        rates.append({
+                            "currency_code": currency,
+                            "buy_rate": buy,
+                            "sell_rate": sell
+                        })
+            
+            if rates:
+                logger.info(f"Aloqabank: scraped {len(rates)} rates")
+            return rates
+    except Exception as e:
+        logger.debug(f"Aloqabank scrape error: {e}")
+        return []
+
+
+async def scrape_hamkorbank() -> List[Dict]:
+    """Hamkorbank - https://hamkorbank.uz/"""
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                "https://hamkorbank.uz/uz/",
+                headers=HEADERS,
+                follow_redirects=True
+            )
+            if response.status_code != 200:
+                return []
+            
+            soup = BeautifulSoup(response.text, 'lxml')
+            rates = []
+            text = soup.get_text()
+            
+            for currency in ['USD', 'EUR', 'RUB']:
+                pattern = rf'{currency}[^\d]*(\d[\d\s,.]+)[^\d]*(\d[\d\s,.]+)'
+                match = re.search(pattern, text)
+                if match:
+                    buy = parse_number(match.group(1))
+                    sell = parse_number(match.group(2))
+                    if buy and sell and 1000 < buy < 100000:
+                        rates.append({
+                            "currency_code": currency,
+                            "buy_rate": buy,
+                            "sell_rate": sell
+                        })
+            
+            if rates:
+                logger.info(f"Hamkorbank: scraped {len(rates)} rates")
+            return rates
+    except Exception as e:
+        logger.debug(f"Hamkorbank scrape error: {e}")
+        return []
+
+
+def parse_number(text: str) -> Optional[float]:
+    """Parse number from text like '12 850' or '12,850' or '12850'"""
+    try:
+        clean = text.replace(' ', '').replace(',', '.')
+        # Handle multiple dots
+        if clean.count('.') > 1:
+            parts = clean.split('.')
+            clean = ''.join(parts[:-1]) + '.' + parts[-1]
+        return float(clean)
+    except:
+        return None
+
+
+def extract_rates(text: str) -> List[float]:
+    """Extract rate numbers from text"""
     pattern = r'\d[\d\s,\.]*\d'
     matches = re.findall(pattern, text)
     
     numbers = []
     for m in matches:
-        try:
-            # Clean and convert
-            clean = m.replace(' ', '').replace(',', '.')
-            # Handle multiple dots (e.g., 12.850.00)
-            parts = clean.split('.')
-            if len(parts) > 2:
-                clean = ''.join(parts[:-1]) + '.' + parts[-1]
-            num = float(clean)
-            # Exchange rates should be reasonable (100-100000 for UZS)
-            if 100 < num < 500000:
-                numbers.append(num)
-        except:
-            continue
+        num = parse_number(m)
+        if num and 1000 < num < 100000:  # Valid UZS rate range
+            numbers.append(num)
     
     return numbers
 
 
-async def get_all_bank_rates() -> dict[str, list[dict]]:
-    """Fetch rates from all configured banks"""
+# Bank scraper mapping
+BANK_SCRAPERS = {
+    "nbu": scrape_nbu,
+    "kapitalbank": scrape_kapitalbank,
+    "asakabank": scrape_asakabank,
+    "xalqbank": scrape_xalqbank,
+    "ipotekabank": scrape_ipotekabank,
+    "agrobank": scrape_agrobank,
+    "aloqabank": scrape_aloqabank,
+    "hamkorbank": scrape_hamkorbank,
+}
+
+
+async def get_all_bank_rates() -> Dict[str, List[Dict]]:
+    """Fetch rates from all available banks"""
     results = {}
     
-    for bank_code in BANK_CONFIGS:
-        rates = await scrape_bank(bank_code)
-        if rates:
-            results[bank_code] = rates
+    for bank_code, scraper in BANK_SCRAPERS.items():
+        try:
+            rates = await scraper()
+            if rates:
+                results[bank_code] = rates
+        except Exception as e:
+            logger.debug(f"{bank_code} failed: {e}")
     
-    logger.info(f"Scraped rates from {len(results)} banks: {list(results.keys())}")
+    logger.info(f"Scraped real rates from {len(results)} banks: {list(results.keys())}")
     return results
-
-
-async def get_bank_rate(bank_code: str, currency: str) -> Optional[dict]:
-    """Get specific currency rate from a bank"""
-    rates = await scrape_bank(bank_code)
-    for rate in rates:
-        if rate["currency_code"] == currency:
-            return rate
-    return None
