@@ -34,8 +34,8 @@ async def update_all_rates() -> bool:
             
             # For each bank
             for bank_code, bank_info in BANKS.items():
-                spread_buy = bank_info.get("spread_buy", 0)
-                spread_sell = bank_info.get("spread_sell", 0)
+                buy_spread = bank_info.get("buy_spread", 0)
+                sell_spread = bank_info.get("sell_spread", 0)
                 
                 # For each currency from CBU
                 for rate_data in cbu_rates:
@@ -43,8 +43,8 @@ async def update_all_rates() -> bool:
                     
                     # Calculate buy/sell for commercial banks
                     if bank_info["type"] == "commercial":
-                        buy_rate = round(official_rate * (1 + spread_buy), 2)
-                        sell_rate = round(official_rate * (1 + spread_sell), 2)
+                        buy_rate = round(official_rate * (1 + buy_spread), 2)
+                        sell_rate = round(official_rate * (1 + sell_spread), 2)
                     else:
                         buy_rate = None
                         sell_rate = None
