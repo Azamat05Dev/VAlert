@@ -111,3 +111,19 @@ class FavoriteBank(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
     user: Mapped["User"] = relationship("User", back_populates="favorites")
+
+class SmartExchange(Base):
+    """Smart exchange tracker - notifies when best rate increases"""
+    __tablename__ = "smart_exchanges"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    currency_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    amount: Mapped[float] = mapped_column(Float, nullable=False)
+    target_increase: Mapped[float] = mapped_column(Float, nullable=False)
+    initial_best_rate: Mapped[float] = mapped_column(Float, nullable=False)
+    initial_best_bank: Mapped[str] = mapped_column(String(50), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_accepted: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
