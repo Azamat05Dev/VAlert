@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import './index.css'
+import ChartTab from './components/ChartTab'
+import AlertForm from './components/AlertForm'
 
 // Telegram WebApp API
 const tg = window.Telegram?.WebApp
 
-// Mock data for demo (will be replaced with API)
+// Real-time rates (mock - will be replaced with API)
 const MOCK_RATES = [
   { code: 'USD', name: 'AQSh Dollari', buy: 12680, sell: 12750, change: 0.15, official: 12720 },
   { code: 'EUR', name: 'Yevro', buy: 13820, sell: 13920, change: -0.08, official: 13870 },
@@ -13,12 +15,12 @@ const MOCK_RATES = [
   { code: 'CNY', name: 'Xitoy Yuani', buy: 1745, sell: 1768, change: -0.05, official: 1752 },
 ]
 
-// Tab definitions
+// Tab definitions with new Charts tab
 const TABS = [
   { id: 'rates', icon: '📊', label: 'Kurslar' },
-  { id: 'calc', icon: '🧮', label: 'Kalkulyator' },
+  { id: 'charts', icon: '📈', label: 'Grafik' },
+  { id: 'calc', icon: '🧮', label: 'Kalkul.' },
   { id: 'alerts', icon: '🔔', label: 'Alertlar' },
-  { id: 'settings', icon: '⚙️', label: 'Sozlamalar' },
 ]
 
 function App() {
@@ -26,6 +28,8 @@ function App() {
   const [rates, setRates] = useState(MOCK_RATES)
   const [loading, setLoading] = useState(false)
   const [lastUpdate, setLastUpdate] = useState(new Date())
+  const [showAlertForm, setShowAlertForm] = useState(false)
+  const [pullDistance, setPullDistance] = useState(0)
 
   useEffect(() => {
     // Initialize Telegram WebApp
@@ -34,32 +38,116 @@ function App() {
       tg.expand()
       tg.setHeaderColor('#0f172a')
       tg.setBackgroundColor('#0f172a')
+
+      // Enable closing confirmation
+      tg.enableClosingConfirmation()
     }
   }, [])
 
+  // Haptic feedback helper
+  const haptic = useCallback((type = 'light') => {
+    tg?.HapticFeedback?.impactOccurred(type)
+  }, [])
+
   const refreshRates = async () => {
+    haptic('medium')
     setLoading(true)
+
     // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await new Promise(resolve => setTimeout(resolve, 800))
+
+    // Simulate small rate changes
+    setRates(prev => prev.map(r => ({
+      ...r,
+      buy: r.buy + (Math.random() - 0.5) * 10,
+      sell: r.sell + (Math.random() - 0.5) * 10,
+      change: parseFloat((r.change + (Math.random() - 0.5) * 0.1).toFixed(2)),
+    })))
+
     setLastUpdate(new Date())
     setLoading(false)
+    haptic('light')
+  }
+
+  // Pull to refresh handler
+  const handleTouchStart = (e) => {
+    if (window.scrollY === 0) {
+      const touch = e.touches[0]
+      window._pullStartY = touch.clientY
+    }
+  }
+
+  const handleTouchMove = (e) => {
+    if (window._pullStartY && window.scrollY === 0) {
+      const touch = e.touches[0]
+      const diff = touch.clientY - window._pullStartY
+      if (diff > 0 && diff < 150) {
+        setPullDistance(diff)
+      }
+    }
+  }
+
+  const handleTouchEnd = () => {
+    if (pullDistance > 80) {
+      refreshRates()
+    }
+    setPullDistance(0)
+    window._pullStartY = null
+  }
+
+  const handleTabChange = (tabId) => {
+    haptic('light')
+    setActiveTab(tabId)
+  }
+
+  const handleCreateAlert = async (alertData) => {
+    console.log('Creating alert:', alertData)
+    haptic('success')
+    // In production: call API
   }
 
   return (
-    <div className="min-h-screen pb-24 safe-area-top safe-area-bottom">
+    <div
+      className="min-h-screen pb-24 safe-area-top safe-area-bottom"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Pull to Refresh Indicator */}
+      {pullDistance > 0 && (
+        <div
+          className="fixed top-0 left-0 right-0 flex justify-center items-center z-50 transition-all"
+          style={{ height: pullDistance, opacity: pullDistance / 80 }}
+        >
+          <div className={`w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full
+            ${pullDistance > 80 ? 'animate-spin' : ''}`}
+          ></div>
+        </div>
+      )}
+
       {/* Header */}
       <Header lastUpdate={lastUpdate} onRefresh={refreshRates} loading={loading} />
 
-      {/* Main Content */}
-      <main className="px-4 py-6 animate-fade-in">
-        {activeTab === 'rates' && <RatesTab rates={rates} loading={loading} />}
-        {activeTab === 'calc' && <CalculatorTab rates={rates} />}
-        {activeTab === 'alerts' && <AlertsTab />}
-        {activeTab === 'settings' && <SettingsTab />}
+      {/* Main Content with Page Transitions */}
+      <main className="px-4 py-6">
+        <div key={activeTab} className="animate-fade-in">
+          {activeTab === 'rates' && <RatesTab rates={rates} loading={loading} />}
+          {activeTab === 'charts' && <ChartTab />}
+          {activeTab === 'calc' && <CalculatorTab rates={rates} />}
+          {activeTab === 'alerts' && <AlertsTab onNewAlert={() => setShowAlertForm(true)} />}
+        </div>
       </main>
 
       {/* Bottom Navigation */}
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
+
+      {/* Alert Form Modal */}
+      {showAlertForm && (
+        <AlertForm
+          onClose={() => setShowAlertForm(false)}
+          onSubmit={handleCreateAlert}
+        />
+      )}
     </div>
   )
 }
@@ -75,16 +163,15 @@ function Header({ lastUpdate, onRefresh, loading }) {
               💰 VAlert
             </h1>
             <p className="text-sm text-dark-400 mt-1">
-              Yangilangan: {lastUpdate.toLocaleTimeString('uz-UZ')}
+              {lastUpdate.toLocaleTimeString('uz-UZ')}
             </p>
           </div>
           <button
             onClick={onRefresh}
             disabled={loading}
-            className={`w-12 h-12 glass-button flex items-center justify-center text-xl
-                       ${loading ? 'animate-spin' : ''}`}
+            className="w-12 h-12 glass-button flex items-center justify-center text-xl ripple"
           >
-            🔄
+            <span className={loading ? 'animate-spin' : ''}>🔄</span>
           </button>
         </div>
       </div>
@@ -100,15 +187,15 @@ function RatesTab({ rates, loading }) {
       <div className="grid grid-cols-2 gap-3">
         <QuickStat
           label="USD/UZS"
-          value="12,720"
-          change="+0.15%"
-          positive={true}
+          value={rates[0]?.official?.toLocaleString() || '12,720'}
+          change={`${rates[0]?.change >= 0 ? '+' : ''}${rates[0]?.change}%`}
+          positive={rates[0]?.change >= 0}
         />
         <QuickStat
           label="EUR/UZS"
-          value="13,870"
-          change="-0.08%"
-          positive={false}
+          value={rates[1]?.official?.toLocaleString() || '13,870'}
+          change={`${rates[1]?.change >= 0 ? '+' : ''}${rates[1]?.change}%`}
+          positive={rates[1]?.change >= 0}
         />
       </div>
 
@@ -119,21 +206,20 @@ function RatesTab({ rates, loading }) {
         </h2>
 
         {loading ? (
-          // Skeleton Loading
           [1, 2, 3].map(i => (
-            <div key={i} className="glass-card animate-pulse">
+            <div key={i} className="glass-card">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-dark-700"></div>
+                <div className="w-12 h-12 rounded-full bg-dark-700 animate-pulse"></div>
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 w-20 bg-dark-700 rounded"></div>
-                  <div className="h-3 w-32 bg-dark-700 rounded"></div>
+                  <div className="h-4 w-20 bg-dark-700 rounded animate-pulse"></div>
+                  <div className="h-3 w-32 bg-dark-700 rounded animate-pulse"></div>
                 </div>
               </div>
             </div>
           ))
         ) : (
           rates.map((rate, i) => (
-            <RateCard key={rate.code} rate={rate} delay={i * 0.1} />
+            <RateCard key={rate.code} rate={rate} delay={i * 0.05} />
           ))
         )}
       </div>
@@ -147,7 +233,7 @@ function QuickStat({ label, value, change, positive }) {
     <div className="glass-card">
       <p className="text-sm text-dark-400 mb-1">{label}</p>
       <p className="text-2xl font-bold text-white">{value}</p>
-      <p className={`text-sm font-medium ${positive ? 'value-up' : 'value-down'}`}>
+      <p className={`text-sm font-medium ${positive ? 'text-accent-green' : 'text-accent-red'}`}>
         {positive ? '📈' : '📉'} {change}
       </p>
     </div>
@@ -163,16 +249,14 @@ function RateCard({ rate, delay }) {
 
   return (
     <div
-      className="rate-card animate-slide-up"
+      className="rate-card"
       style={{ animationDelay: `${delay}s` }}
     >
       <div className="flex items-center gap-4">
-        {/* Currency Icon */}
         <div className={`currency-icon ${rate.code.toLowerCase()}`}>
           {getCurrencyIcon(rate.code)}
         </div>
 
-        {/* Currency Info */}
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <span className="font-bold text-white">{rate.code}</span>
@@ -184,17 +268,16 @@ function RateCard({ rate, delay }) {
           <p className="text-sm text-dark-400">{rate.name}</p>
         </div>
 
-        {/* Rates */}
         <div className="text-right">
           <div className="flex items-center gap-3 text-sm">
             <div>
-              <p className="text-dark-400 text-xs">Sotib olish</p>
-              <p className="font-semibold text-accent-green">{rate.buy.toLocaleString()}</p>
+              <p className="text-dark-400 text-xs">Olish</p>
+              <p className="font-semibold text-accent-green">{Math.round(rate.buy).toLocaleString()}</p>
             </div>
             <div className="w-px h-8 bg-dark-600"></div>
             <div>
               <p className="text-dark-400 text-xs">Sotish</p>
-              <p className="font-semibold text-accent-red">{rate.sell.toLocaleString()}</p>
+              <p className="font-semibold text-accent-red">{Math.round(rate.sell).toLocaleString()}</p>
             </div>
           </div>
         </div>
@@ -207,21 +290,25 @@ function RateCard({ rate, delay }) {
 function CalculatorTab({ rates }) {
   const [amount, setAmount] = useState('')
   const [fromCurrency, setFromCurrency] = useState('USD')
-  const [toCurrency, setToCurrency] = useState('UZS')
+  const [direction, setDirection] = useState('buy') // buy or sell
 
-  const getRate = (code) => rates.find(r => r.code === code)?.sell || 1
+  const getRate = (code, dir) => {
+    const r = rates.find(r => r.code === code)
+    return dir === 'buy' ? r?.sell : r?.buy || 1
+  }
 
-  const result = amount ? (parseFloat(amount) * getRate(fromCurrency)).toLocaleString() : '0'
+  const rate = getRate(fromCurrency, direction)
+  const result = amount ? (parseFloat(amount) * rate) : 0
 
   return (
-    <div className="space-y-6 animate-slide-up">
+    <div className="space-y-6">
       <div className="glass-card">
         <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
           <span>🧮</span> Valyuta Kalkulyatori
         </h2>
 
-        {/* Amount Input */}
         <div className="space-y-4">
+          {/* Amount Input */}
           <div>
             <label className="block text-sm text-dark-400 mb-2">Miqdor</label>
             <input
@@ -233,38 +320,56 @@ function CalculatorTab({ rates }) {
             />
           </div>
 
-          {/* Currency Selectors */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-dark-400 mb-2">Dan</label>
-              <select
-                value={fromCurrency}
-                onChange={(e) => setFromCurrency(e.target.value)}
-                className="input-premium"
-              >
-                <option value="USD">🇺🇸 USD</option>
-                <option value="EUR">🇪🇺 EUR</option>
-                <option value="RUB">🇷🇺 RUB</option>
-                <option value="GBP">🇬🇧 GBP</option>
-              </select>
+          {/* Currency Selector */}
+          <div>
+            <label className="block text-sm text-dark-400 mb-2">Valyuta</label>
+            <div className="grid grid-cols-4 gap-2">
+              {['USD', 'EUR', 'RUB', 'GBP'].map(c => (
+                <button
+                  key={c}
+                  onClick={() => setFromCurrency(c)}
+                  className={`py-3 rounded-xl font-semibold transition-all
+                    ${fromCurrency === c
+                      ? 'bg-primary-500 text-white shadow-glow'
+                      : 'bg-dark-700/50 text-dark-400 hover:text-white'}`}
+                >
+                  {c}
+                </button>
+              ))}
             </div>
-            <div>
-              <label className="block text-sm text-dark-400 mb-2">Ga</label>
-              <select
-                value={toCurrency}
-                onChange={(e) => setToCurrency(e.target.value)}
-                className="input-premium"
-              >
-                <option value="UZS">🇺🇿 UZS</option>
-              </select>
-            </div>
+          </div>
+
+          {/* Direction */}
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setDirection('buy')}
+              className={`py-3 rounded-xl font-medium transition-all
+                ${direction === 'buy'
+                  ? 'bg-accent-green/20 text-accent-green border-2 border-accent-green'
+                  : 'bg-dark-700/50 text-dark-400 border-2 border-transparent'}`}
+            >
+              💵 Sotib olish
+            </button>
+            <button
+              onClick={() => setDirection('sell')}
+              className={`py-3 rounded-xl font-medium transition-all
+                ${direction === 'sell'
+                  ? 'bg-accent-red/20 text-accent-red border-2 border-accent-red'
+                  : 'bg-dark-700/50 text-dark-400 border-2 border-transparent'}`}
+            >
+              💰 Sotish
+            </button>
           </div>
 
           {/* Result */}
           <div className="mt-6 p-6 bg-gradient-to-r from-primary-500/20 to-primary-600/20 rounded-xl border border-primary-500/30">
             <p className="text-sm text-dark-300 mb-2">Natija</p>
             <p className="text-3xl font-bold text-white">
-              {result} <span className="text-lg text-dark-400">so'm</span>
+              {result.toLocaleString('uz-UZ', { maximumFractionDigits: 0 })}
+              <span className="text-lg text-dark-400 ml-2">so'm</span>
+            </p>
+            <p className="text-xs text-dark-400 mt-2">
+              1 {fromCurrency} = {rate.toLocaleString()} so'm ({direction === 'buy' ? 'sotib olish' : 'sotish'})
             </p>
           </div>
         </div>
@@ -274,20 +379,20 @@ function CalculatorTab({ rates }) {
 }
 
 // Alerts Tab
-function AlertsTab() {
+function AlertsTab({ onNewAlert }) {
   const [alerts] = useState([
-    { id: 1, currency: 'USD', type: 'above', value: 13000, active: true },
-    { id: 2, currency: 'EUR', type: 'below', value: 13500, active: false },
+    { id: 1, currency: 'USD', direction: 'above', threshold: 13000, active: true },
+    { id: 2, currency: 'EUR', direction: 'below', threshold: 13500, active: false },
   ])
 
   return (
-    <div className="space-y-6 animate-slide-up">
+    <div className="space-y-6">
       <div className="glass-card">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <span>🔔</span> Alertlarim
           </h2>
-          <button className="btn-primary text-sm py-2">
+          <button onClick={onNewAlert} className="btn-primary text-sm py-2 px-4">
             ➕ Yangi
           </button>
         </div>
@@ -295,7 +400,10 @@ function AlertsTab() {
         {alerts.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-6xl mb-4">📭</p>
-            <p className="text-dark-400">Hali alertlar yo'q</p>
+            <p className="text-dark-400 mb-4">Hali alertlar yo'q</p>
+            <button onClick={onNewAlert} className="btn-primary">
+              Birinchi alertni yarating
+            </button>
           </div>
         ) : (
           <div className="space-y-3">
@@ -303,91 +411,30 @@ function AlertsTab() {
               <div key={alert.id} className="flex items-center justify-between p-4 bg-dark-800/50 rounded-xl">
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">
-                    {alert.type === 'above' ? '📈' : '📉'}
+                    {alert.direction === 'above' ? '📈' : '📉'}
                   </span>
                   <div>
                     <p className="font-semibold text-white">
-                      {alert.currency} {alert.type === 'above' ? '>' : '<'} {alert.value.toLocaleString()}
+                      {alert.currency} {alert.direction === 'above' ? '>' : '<'} {alert.threshold.toLocaleString()}
                     </p>
-                    <p className="text-sm text-dark-400">
+                    <p className={`text-sm ${alert.active ? 'text-accent-green' : 'text-dark-400'}`}>
                       {alert.active ? '🟢 Faol' : '⏸️ To\'xtatilgan'}
                     </p>
                   </div>
                 </div>
-                <button className="p-2 hover:bg-dark-700 rounded-lg transition-colors">
-                  🗑️
-                </button>
+                <div className="flex gap-2">
+                  <button className="p-2 hover:bg-dark-700 rounded-lg transition-colors text-dark-400 hover:text-white">
+                    {alert.active ? '⏸️' : '▶️'}
+                  </button>
+                  <button className="p-2 hover:bg-dark-700 rounded-lg transition-colors text-dark-400 hover:text-accent-red">
+                    🗑️
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-// Settings Tab
-function SettingsTab() {
-  const [notifications, setNotifications] = useState(true)
-  const [dailyReport, setDailyReport] = useState(false)
-
-  return (
-    <div className="space-y-6 animate-slide-up">
-      <div className="glass-card">
-        <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-          <span>⚙️</span> Sozlamalar
-        </h2>
-
-        <div className="space-y-4">
-          <SettingItem
-            icon="🔔"
-            title="Bildirishnomalar"
-            description="Alert triggerlarida xabar olish"
-            enabled={notifications}
-            onChange={setNotifications}
-          />
-          <SettingItem
-            icon="📅"
-            title="Kunlik hisobot"
-            description="Har kuni ertalab kurs xulosasi"
-            enabled={dailyReport}
-            onChange={setDailyReport}
-          />
-        </div>
-      </div>
-
-      {/* About Section */}
-      <div className="glass-card">
-        <h3 className="font-semibold text-white mb-4">Haqida</h3>
-        <div className="space-y-2 text-sm text-dark-400">
-          <p>📱 VAlert v2.0</p>
-          <p>👨‍💻 Azamat Qalmuratov</p>
-          <p>🌐 O'zbekiston bank kurslari</p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Setting Item Component
-function SettingItem({ icon, title, description, enabled, onChange }) {
-  return (
-    <div className="flex items-center justify-between p-4 bg-dark-800/50 rounded-xl">
-      <div className="flex items-center gap-3">
-        <span className="text-2xl">{icon}</span>
-        <div>
-          <p className="font-medium text-white">{title}</p>
-          <p className="text-sm text-dark-400">{description}</p>
-        </div>
-      </div>
-      <button
-        onClick={() => onChange(!enabled)}
-        className={`w-14 h-8 rounded-full transition-all duration-200 relative
-          ${enabled ? 'bg-primary-500' : 'bg-dark-600'}`}
-      >
-        <span className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all duration-200 shadow-lg
-          ${enabled ? 'left-7' : 'left-1'}`}></span>
-      </button>
     </div>
   )
 }
@@ -401,10 +448,10 @@ function BottomNav({ activeTab, onTabChange }) {
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
-            className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200
+            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all
               ${activeTab === tab.id
-                ? 'bg-primary-500/20 text-primary-400'
-                : 'text-dark-400 hover:text-white'}`}
+                ? 'bg-primary-500/20 text-primary-400 scale-105'
+                : 'text-dark-400 hover:text-white active:scale-95'}`}
           >
             <span className="text-xl">{tab.icon}</span>
             <span className="text-xs font-medium">{tab.label}</span>
