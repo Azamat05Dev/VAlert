@@ -3,7 +3,7 @@ Database Models for Currency Alert Bot - Extended
 """
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Integer, Float, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import String, Integer, BigInteger, Float, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -16,7 +16,7 @@ class User(Base):
     """User model"""
     __tablename__ = "users"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     username: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     first_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     last_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -43,7 +43,7 @@ class Alert(Base):
     __tablename__ = "alerts"
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     bank_code: Mapped[str] = mapped_column(String(50), nullable=False)
     currency_code: Mapped[str] = mapped_column(String(10), nullable=False)
     threshold: Mapped[float] = mapped_column(Float, nullable=False)
@@ -93,7 +93,7 @@ class Portfolio(Base):
     __tablename__ = "portfolio"
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     currency_code: Mapped[str] = mapped_column(String(10), nullable=False)
     amount: Mapped[float] = mapped_column(Float, nullable=False)
     buy_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Sotib olgan narx
@@ -107,7 +107,7 @@ class FavoriteBank(Base):
     __tablename__ = "favorite_banks"
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     bank_code: Mapped[str] = mapped_column(String(50), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
@@ -119,7 +119,7 @@ class SmartExchange(Base):
     __tablename__ = "smart_exchanges"
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     currency_code: Mapped[str] = mapped_column(String(10), nullable=False)  # USD, KZT...
     amount: Mapped[float] = mapped_column(Float, nullable=False)  # User's currency amount
     target_increase: Mapped[float] = mapped_column(Float, nullable=False)  # +15, +20 etc.
