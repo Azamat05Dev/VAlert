@@ -1,17 +1,50 @@
 {
-    "name": "VAlert",
+    "name": "VAlert - Valyuta Kurslari",
     "short_name": "VAlert",
-    "description": "O'zbekiston valyuta kurslari - real vaqtda",
+    "description": "O'zbekiston bank valyuta kurslari kuzatuvchisi va alertlar",
     "start_url": "/",
     "display": "standalone",
+    "orientation": "portrait",
     "background_color": "#0f172a",
     "theme_color": "#0ea5e9",
-    "orientation": "portrait",
+    "categories": [
+        "finance",
+        "utilities"
+    ],
+    "lang": "uz",
     "icons": [
         {
-            "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>",
-            "sizes": "any",
-            "type": "image/svg+xml"
+            "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect fill='%230f172a' width='512' height='512' rx='90'/><text x='256' y='340' font-size='300' text-anchor='middle'>💰</text></svg>",
+            "sizes": "512x512",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
         }
-    ]
+    ],
+    "screenshots": [],
+    "shortcuts": [
+        {
+            "name": "Kurslar",
+            "short_name": "Kurslar",
+            "url": "/?tab=rates",
+            "icons": [
+                {
+                    "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><text y='90%' font-size='90'>📊</text></svg>",
+                    "sizes": "96x96"
+                }
+            ]
+        },
+        {
+            "name": "Alertlar",
+            "short_name": "Alertlar",
+            "url": "/?tab=alerts",
+            "icons": [
+                {
+                    "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><text y='90%' font-size='90'>🔔</text></svg>",
+                    "sizes": "96x96"
+                }
+            ]
+        }
+    ],
+    "related_applications": [],
+    "prefer_related_applications": false
 }
